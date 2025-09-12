@@ -11,6 +11,8 @@ import java.awt.*;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 
@@ -40,14 +42,15 @@ public class RetrieveProfile implements ICommand {
         try {
             String user = Objects.requireNonNull(event.getOption("usuario")).getAsString();
             String avatarUrl = "https://www.hobba.tv/habblet/avatarimageByUsername/" + user + "?size=undefined&direction=0&head_direction=2&headonly=0&action=std&gesture=std";
-            log.info("Ejecutando comando 'profile' por " + event.getUser().getEffectiveName() + " buscando a " + user);
+            log.info("Ejecutando comando 'profile' por " + event.getUser().getEffectiveName() + " buscando a " + user + " " +
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SS")));
             this.isValidImage(avatarUrl);
 
             EmbedBuilder embed = new EmbedBuilder()
                     .setImage(avatarUrl)
                     .setTitle("👤 Te presentamos a " + user + " ! :)")
                     .setDescription(event.getMember().getEffectiveName() + " moría por ver como luce hoy " + user)
-                    .setColor(Color.PINK)
+                    .setColor(Color.GREEN)
                     .setFooter("https://hobba.tv",
                             "https://media.discordapp.net/attachments/1415545619757531189/1415875828989820968/image.png?ex=68c4cc9f&is=68c37b1f&hm=e11645338c8b0e57ea47132114bf3917206b855f0fbb347a125a0e3d89657a37&=&format=webp&quality=lossless");
 
