@@ -1,5 +1,5 @@
 import cmdmanager.SlashCommands;
-import events.RetrieveProfile;
+import events.RetrieveProfileAsync;
 import events.WelcomeGuild;
 import interfaces.ICommand;
 import net.dv8tion.jda.api.JDA;
@@ -16,7 +16,7 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) throws InterruptedException {
         List<ICommand> commandList = List.of(
-                new RetrieveProfile()
+                new RetrieveProfileAsync()
         );
 
 //        for (ICommand command : commandList) {
