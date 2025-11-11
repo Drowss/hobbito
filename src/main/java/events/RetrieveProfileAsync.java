@@ -99,7 +99,7 @@ public class RetrieveProfileAsync implements ICommand {
                 .setTitle("👤 Te presentamos a " + usuario + " ! :)")
                 .setDescription(event.getUser().getEffectiveName() + " moría por ver como luce hoy " + usuario)
                 .setColor(Color.GREEN)
-                .setFooter("https://hobba.tv",
+                .setFooter("hobba.tv",
                         "https://media.discordapp.net/attachments/1415545619757531189/1415875828989820968/image.png?ex=68c4cc9f&is=68c37b1f&hm=e11645338c8b0e57ea47132114bf3917206b855f0fbb347a125a0e3d89657a37&=&format=webp&quality=lossless");
 
         embed.addField("🎭 Amigos: 69",
