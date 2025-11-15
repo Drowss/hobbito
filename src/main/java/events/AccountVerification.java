@@ -69,7 +69,7 @@ public class AccountVerification implements ICommand {
                     .anyMatch(role -> role.getId().equals(VERIFICATION_ROLE_ID))) {
 
                 sendLog(event, "El usuario de Discord " + discordUserName + " ya está verificado como " + user);
-                interactionHook.sendMessage("✅ Ya estás verificado como " + user + " en Hobba.")
+                interactionHook.sendMessage("✅ Ya estás verificado como " + discordUserName + " en Hobba.")
                         .queue();
                 return;
             } else if (userVerificationCodes.getIfPresent(event.getUser().getId()) != null) {
@@ -115,7 +115,9 @@ public class AccountVerification implements ICommand {
                                                                         .queue();
 
                                                                 EmbedBuilder embed = buildSuccessVerification(event, updatedUser);
-                                                                event.getChannel().sendMessageEmbeds(embed.build()).queue();
+                                                                event.getJDA()
+                                                                        .getTextChannelById("640666346958487563")
+                                                                        .sendMessageEmbeds(embed.build()).queue();
 
                                                                 Disposable s = subscriptionRef.get();
                                                                 if (s != null && !s.isDisposed()) s.dispose();
@@ -132,6 +134,10 @@ public class AccountVerification implements ICommand {
                                         .doOnComplete(() -> {
                                             sendLog(event,
                                                     "No se pudo verificar al usuario " + userResponse.getUsername() + " después de " + tries + " intentos.");
+                                            interactionHook.sendMessage(
+                                                    "❌ No se pudo completar la verificación. " +
+                                                            "Por favor, intenta el proceso nuevamente o dirígete al canal <#1022664522605010954> para verificación manual."
+                                            ).queue();
                                         })
                                         .subscribe();
 
