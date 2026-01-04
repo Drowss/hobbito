@@ -1,4 +1,4 @@
-package common;
+package com.drow.hobbito.common;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 

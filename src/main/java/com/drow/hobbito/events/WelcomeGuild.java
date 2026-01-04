@@ -1,4 +1,4 @@
-package events;
+package com.drow.hobbito.events;
 
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;

@@ -1,6 +1,6 @@
-package events;
+package com.drow.hobbito.events;
 
-import interfaces.ICommand;
+import com.drow.hobbito.interfaces.ICommand;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;

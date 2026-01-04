@@ -1,12 +1,12 @@
-package events;
+package com.drow.hobbito.events;
 
-import adapter.GetUserAdapter;
-import adapter.response.UserResponse;
+import com.drow.hobbito.adapter.GetUserAdapter;
+import com.drow.hobbito.adapter.response.UserResponse;
 import com.github.benmanes.caffeine.cache.Cache;
-import common.Components;
-import common.HobbaException;
-import common.HobbaUserCode;
-import interfaces.ICommand;
+import com.drow.hobbito.common.Components;
+import com.drow.hobbito.common.HobbaException;
+import com.drow.hobbito.common.HobbaUserCode;
+import com.drow.hobbito.interfaces.ICommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static common.Components.CAFFEINE_TTL;
+import static com.drow.hobbito.common.Components.CAFFEINE_TTL;
 
 @Slf4j
 @RequiredArgsConstructor

@@ -1,26 +1,22 @@
-package adapter;
+package com.drow.hobbito.adapter;
 
-import adapter.response.UserResponse;
-import common.HobbaException;
+import com.drow.hobbito.adapter.response.UserResponse;
+import com.drow.hobbito.common.HobbaException;
 import io.github.cdimascio.dotenv.Dotenv;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @Slf4j
+@Service
+@RequiredArgsConstructor
 public class GetUserAdapter {
     private final WebClient webClient;
     private final Dotenv dotenv;
-
-    public GetUserAdapter(Dotenv  dotenv) {
-        this.webClient = WebClient
-                .builder()
-                .baseUrl("https://api.hobba.tv")
-                .build();
-        this.dotenv = dotenv;
-    }
 
     public Mono<UserResponse> getUser(String username) {
         return webClient.get()

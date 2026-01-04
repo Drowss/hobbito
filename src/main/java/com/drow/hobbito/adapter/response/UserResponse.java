@@ -1,4 +1,4 @@
-package adapter.response;
+package com.drow.hobbito.adapter.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
