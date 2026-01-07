@@ -4,6 +4,7 @@ import com.drow.hobbito.adapter.GetUserAdapter;
 import com.drow.hobbito.cmdmanager.SlashCommands;
 import com.drow.hobbito.common.HobbaUserCode;
 import com.drow.hobbito.events.AccountVerification;
+import com.drow.hobbito.events.TicketReaction;
 import com.drow.hobbito.interfaces.ICommand;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -14,6 +15,7 @@ import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -81,7 +83,7 @@ public class BotConfig {
     }
 
     @Bean
-    public JDA jda(@Qualifier("allDiscordCommands") List<ICommand> allDiscordCommands, Dotenv dotenv) {
+    public JDA jda(@Qualifier("allDiscordCommands") List<ICommand> allDiscordCommands, Dotenv dotenv, List<String> allowedGuildsToUseAllDiscordCommands) {
         String token = dotenv.get("DISCORD_BOT_TOKEN");
 
         if (token == null || token.isEmpty()) {
@@ -90,12 +92,15 @@ public class BotConfig {
         }
 
         return JDABuilder.createDefault(token,
+                        GatewayIntent.GUILD_MESSAGE_REACTIONS,
                         GatewayIntent.GUILD_MEMBERS,
                         GatewayIntent.GUILD_MESSAGES,
                         GatewayIntent.MESSAGE_CONTENT)
+                .setMemberCachePolicy(MemberCachePolicy.ALL)
                 .setActivity(Activity.playing("Snowstorm"))
                 .setStatus(OnlineStatus.ONLINE)
                 .addEventListeners(new SlashCommands(allDiscordCommands))
+                .addEventListeners(new TicketReaction(allowedGuildsToUseAllDiscordCommands))
                 .setAutoReconnect(true)
                 .build();
     }
