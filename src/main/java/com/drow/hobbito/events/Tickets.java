@@ -26,7 +26,7 @@ import java.util.Locale;
 
 @Slf4j
 @RequiredArgsConstructor
-public class TicketReaction extends ListenerAdapter {
+public class Tickets extends ListenerAdapter {
     private final List<String> allowedGuilds;
     private static final long HELPER_ROLE_ID = 791721579658608670L;
     private static final long TICKETS_CATEGORY_ID = 1381795369842905179L;

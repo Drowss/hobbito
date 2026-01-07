@@ -4,7 +4,7 @@ import com.drow.hobbito.adapter.GetUserAdapter;
 import com.drow.hobbito.cmdmanager.SlashCommands;
 import com.drow.hobbito.common.HobbaUserCode;
 import com.drow.hobbito.events.AccountVerification;
-import com.drow.hobbito.events.TicketReaction;
+import com.drow.hobbito.events.Tickets;
 import com.drow.hobbito.interfaces.ICommand;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -100,7 +100,7 @@ public class BotConfig {
                 .setActivity(Activity.playing("Snowstorm"))
                 .setStatus(OnlineStatus.ONLINE)
                 .addEventListeners(new SlashCommands(allDiscordCommands))
-                .addEventListeners(new TicketReaction(allowedGuildsToUseAllDiscordCommands))
+                .addEventListeners(new Tickets(allowedGuildsToUseAllDiscordCommands))
                 .setAutoReconnect(true)
                 .build();
     }
