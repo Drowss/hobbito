@@ -14,6 +14,8 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
@@ -29,7 +31,7 @@ import static com.drow.hobbito.common.Components.CAFFEINE_TTL;
 
 @Slf4j
 @RequiredArgsConstructor
-public class AccountVerification implements ICommand {
+public class AccountVerification extends ListenerAdapter implements ICommand {
     private final Cache<String, HobbaUserCode> userVerificationCodes;
     private final GetUserAdapter getUserAdapter;
     private static final String HOBBA_ICON_URL = "https://i.imgur.com/ePzltxh.png";
