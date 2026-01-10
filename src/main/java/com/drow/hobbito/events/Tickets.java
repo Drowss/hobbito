@@ -6,6 +6,7 @@ import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.PermissionOverride;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.concrete.Category;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
@@ -13,8 +14,11 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.utils.FileUpload;
 
+import java.io.InputStream;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -23,6 +27,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -33,6 +38,13 @@ public class Tickets extends ListenerAdapter {
     private static final long TICKET_LOGS_CHANNEL_ID = 1458331432123498669L;
     private static final long TEXT_CHANNEL_TICKET_ID = 1458330941297791097L;
     private static final long COMMUNITY_GLOBAL_ROLE_ID = 790882776970428416L;
+
+    //pa probar en el sv de pruebas jaj
+//    private static final long HELPER_ROLE_ID = 1458251135692574827L;
+//    private static final long TICKETS_CATEGORY_ID = 1458238145526239404L;
+//    private static final long TICKET_LOGS_CHANNEL_ID = 1458261437561704604L;
+//    private static final long TEXT_CHANNEL_TICKET_ID = 1458238171845365925L;
+//    private static final long COMMUNITY_GLOBAL_ROLE_ID = 1419253526189838416L;
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
@@ -152,7 +164,9 @@ public class Tickets extends ListenerAdapter {
                         EnumSet.of(
                                 Permission.VIEW_CHANNEL,
                                 Permission.MESSAGE_SEND,
-                                Permission.MESSAGE_HISTORY
+                                Permission.MESSAGE_HISTORY,
+                                Permission.MESSAGE_ATTACH_FILES,
+                                Permission.MESSAGE_EMBED_LINKS
                         ),
                         null
                 )
@@ -161,7 +175,9 @@ public class Tickets extends ListenerAdapter {
                         EnumSet.of(
                                 Permission.VIEW_CHANNEL,
                                 Permission.MESSAGE_SEND,
-                                Permission.MESSAGE_HISTORY
+                                Permission.MESSAGE_HISTORY,
+                                Permission.MESSAGE_ATTACH_FILES,
+                                Permission.MESSAGE_EMBED_LINKS
                         ),
                         null
                 )
@@ -179,9 +195,12 @@ public class Tickets extends ListenerAdapter {
                             .queue();
                     Role unwantedRole = guild.getRoleById(COMMUNITY_GLOBAL_ROLE_ID);
                     if (unwantedRole != null) {
-                        channel.getPermissionOverride(unwantedRole)
-                                .delete()
-                                .queue();
+                        PermissionOverride override =
+                                channel.getPermissionOverride(unwantedRole);
+
+                        if (override != null) {
+                            override.delete().queue();
+                        }
                     }
                 });
     }
@@ -201,11 +220,23 @@ public class Tickets extends ListenerAdapter {
     }
 
     private void confirmCloseTicket(ButtonInteractionEvent event) {
+        event.deferEdit().queue(hook -> {
+            hook.editOriginalComponents(
+                    ActionRow.of(
+                            Button.primary("ticket:close:confirm", "✅ Confirmar").asDisabled(),
+                            Button.secondary("ticket:close:cancel", "❌ Cancelar").asDisabled()
+                    )
+            ).queue();
+        });
+
         TextChannel ticketChannel = event.getChannel().asTextChannel();
         Guild guild = event.getGuild();
         TextChannel logsChannel = guild.getTextChannelById(TICKET_LOGS_CHANNEL_ID);
-        List<Message> messages = new ArrayList<>();
 
+        List<Message> messages = new ArrayList<>();
+        List<Message.Attachment> allAttachments = new ArrayList<>();
+
+        // 1️⃣ SOLO recolectamos mensajes
         ticketChannel.getIterableHistory()
                 .cache(false)
                 .forEachAsync(message -> {
@@ -214,17 +245,28 @@ public class Tickets extends ListenerAdapter {
                 })
                 .thenRun(() -> {
 
+                    messages.sort(
+                            (a, b) -> a.getTimeCreated().compareTo(b.getTimeCreated())
+                    );
+
+                    for (Message msg : messages) {
+                        if (!msg.getAttachments().isEmpty()) {
+                            allAttachments.addAll(msg.getAttachments());
+                        }
+                    }
+
                     DateTimeFormatter formatter =
                             DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a")
                                     .withLocale(new Locale("es", "CO"));
 
-                    Collections.reverse(messages);
-
                     StringBuilder chatLog = new StringBuilder();
                     chatLog.append("🧾 Chatlog del **")
-                            .append(ticketChannel.getName() + "** cerrado por " + event.getMember().getAsMention())
+                            .append(ticketChannel.getName())
+                            .append("** cerrado por ")
+                            .append(event.getMember().getAsMention())
                             .append("\n\n");
 
+                    int attachmentCounter = 1;
                     for (Message msg : messages) {
 
                         ZonedDateTime colombiaTime =
@@ -237,29 +279,88 @@ public class Tickets extends ListenerAdapter {
                                 ? member.getEffectiveName()
                                 : msg.getAuthor().getName();
 
+                        String content = msg.getContentDisplay();
+
                         chatLog.append("[")
                                 .append(colombiaTime.format(formatter))
                                 .append("] ")
                                 .append(displayName)
-                                .append(": ")
-                                .append(msg.getContentDisplay())
-                                .append("\n");
+                                .append(": ");
+
+                        if (!content.isBlank()) {
+                            chatLog.append(content);
+                        }
+
+                        if (!msg.getAttachments().isEmpty()) {
+                            for (int i = 0; i < msg.getAttachments().size(); i++) {
+                                chatLog.append("\n   📎 Adjunto ")
+                                        .append(attachmentCounter++);
+                            }
+                        }
+
+                        chatLog.append("\n");
                     }
 
                     int maxLength = 1900;
-                    int length = chatLog.length();
-
-                    for (int i = 0; i < length; i += maxLength) {
-                        int end = Math.min(length, i + maxLength);
+                    for (int i = 0; i < chatLog.length(); i += maxLength) {
+                        int end = Math.min(chatLog.length(), i + maxLength);
                         logsChannel.sendMessage(chatLog.substring(i, end)).queue();
                     }
 
-                    ticketChannel.delete().queue();
+                    uploadAttachmentsInBatches(allAttachments, logsChannel)
+                            .thenRun(() -> ticketChannel.delete().queue());
                 });
     }
 
     private void rejectCloseTicket(ButtonInteractionEvent event) {
         event.deferEdit().queue();
         event.getHook().deleteOriginal().queue();
+    }
+
+    private CompletableFuture<Void> uploadAttachmentsInBatches(
+            List<Message.Attachment> attachments,
+            TextChannel logsChannel
+    ) {
+        final int BATCH_SIZE = 10;
+        List<CompletableFuture<Void>> allFutures = new ArrayList<>();
+
+        for (int i = 0; i < attachments.size(); i += BATCH_SIZE) {
+            int end = Math.min(attachments.size(), i + BATCH_SIZE);
+            List<Message.Attachment> batch = attachments.subList(i, end);
+
+            CompletableFuture<Void> batchFuture =
+                    CompletableFuture
+                            .allOf(
+                                    batch.stream()
+                                            .map(Message.Attachment::retrieveInputStream)
+                                            .toArray(CompletableFuture[]::new)
+                            )
+                            .thenAccept(v -> {
+                                List<FileUpload> uploads = new ArrayList<>();
+
+                                for (int j = 0; j < batch.size(); j++) {
+                                    InputStream stream = batch.get(j)
+                                            .retrieveInputStream()
+                                            .join();
+
+                                    String uniqueName =
+                                            System.currentTimeMillis()
+                                                    + "_" + j + "_"
+                                                    + batch.get(j).getFileName();
+
+                                    uploads.add(
+                                            FileUpload.fromData(stream, uniqueName)
+                                    );
+                                }
+
+                                logsChannel.sendFiles(uploads).complete();
+                            });
+
+            allFutures.add(batchFuture);
+        }
+
+        return CompletableFuture.allOf(
+                allFutures.toArray(new CompletableFuture[0])
+        );
     }
 }
