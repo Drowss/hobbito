@@ -4,6 +4,7 @@ import com.drow.hobbito.adapter.GetUserAdapter;
 import com.drow.hobbito.cmdmanager.SlashCommands;
 import com.drow.hobbito.common.HobbaUserCode;
 import com.drow.hobbito.events.AccountVerification;
+import com.drow.hobbito.events.Giveaway;
 import com.drow.hobbito.events.Tickets;
 import com.drow.hobbito.interfaces.ICommand;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -45,14 +46,16 @@ public class BotConfig {
     @Bean(name = "allDiscordCommands")
     public List<ICommand> allDiscordCommands(Cache<String, HobbaUserCode> cache, GetUserAdapter getUserAdapter) {
         return List.of(
-                new AccountVerification(cache, getUserAdapter)
+                new AccountVerification(cache, getUserAdapter),
+                new Giveaway()
         );
     }
 
     @Bean(name = "publicDiscordCommands")
     public List<ICommand> publicDiscordCommands(@Qualifier("allDiscordCommands") List<ICommand> allDiscordCommands) {
         return allDiscordCommands.stream()
-                .filter(cmd -> !cmd.getName().equalsIgnoreCase("verificar"))
+                .filter(cmd -> !cmd.getName().equalsIgnoreCase("verificar")
+                        && !cmd.getName().equalsIgnoreCase("sorteo"))
                 .toList();
     }
 
@@ -101,6 +104,7 @@ public class BotConfig {
                 .setStatus(OnlineStatus.ONLINE)
                 .addEventListeners(new SlashCommands(allDiscordCommands))
                 .addEventListeners(new Tickets(allowedGuildsToUseAllDiscordCommands))
+                .addEventListeners(new Giveaway())
                 .setAutoReconnect(true)
                 .build();
     }
