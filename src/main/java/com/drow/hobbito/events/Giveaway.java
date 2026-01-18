@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.Channel;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -284,7 +285,20 @@ public class Giveaway extends ListenerAdapter implements ICommand {
                                 .toList()
                 );
 
-                log.info("participantes reales: {}", participantes);
+                Guild guild = channel.getGuild();
+
+                List<Long> userIds = users.stream()
+                        .filter(user -> !user.isBot())
+                        .map(User::getIdLong)
+                        .toList();
+
+                guild.retrieveMembersByIds(userIds).onSuccess(members -> {
+                    List<String> participantesLog = members.stream()
+                            .map(Member::getEffectiveName)
+                            .toList();
+
+                    sendLog(jda, "premio: " + premio + " participantes: " + participantesLog);
+                });
 
                 if (participantes.isEmpty()) {
                     channel.sendMessage("❌ El sorteo terminó sin participantes válidos.").queue();
@@ -297,8 +311,6 @@ public class Giveaway extends ListenerAdapter implements ICommand {
                         .limit(ganadores)
                         .toList();
 
-                log.info("ganadores finales: {}", ganadoresFinales);
-                Guild guild = channel.getGuild();
 
                 List<String> displayNames = new ArrayList<>();
 
@@ -372,6 +384,7 @@ public class Giveaway extends ListenerAdapter implements ICommand {
 
             int startX = centerX - totalBlockWidth / 2;
             int drawY = centerY - avatarHeight / 2;
+            sendLog(jda, "premio: " + premio + " ganadores: " + displayNames);
 
             for (int i = 0; i < winners; i++) {
                 String name = displayNames.get(i);
@@ -416,6 +429,13 @@ public class Giveaway extends ListenerAdapter implements ICommand {
         } catch (Exception e) {
             sendTrace(jda, e);
         }
+    }
+
+    private void sendLog(JDA jda, String log) {
+        TextChannel channel = jda.getTextChannelById(GIVEAWAY_ERROR_CHANNEL_ID);
+        if (channel == null) return;
+
+        channel.sendMessage(log).queue();
     }
 
     private void sendTrace(JDA jda, Throwable e) {
