@@ -23,6 +23,8 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -43,6 +45,7 @@ import static com.drow.hobbito.common.Components.buildAvatarUrl;
 @RequiredArgsConstructor
 public class Giveaway extends ListenerAdapter implements ICommand {
     private static final long GIVEAWAY_ROLE_ID = 1460304976428531936L;
+    private static final long GIVEAWAY_ERROR_CHANNEL_ID = 1462283179284107458L;
     private static final Random RANDOM = new Random();
     private static final ScheduledExecutorService SCHEDULER =
             Executors.newSingleThreadScheduledExecutor();
@@ -98,163 +101,167 @@ public class Giveaway extends ListenerAdapter implements ICommand {
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
-        event.deferReply(true).queue();
-        JDA jda = event.getJDA();
-        Member member = event.getMember();
-        if (member == null) return;
+        try {
+            event.deferReply(true).queue();
+            JDA jda = event.getJDA();
+            Member member = event.getMember();
+            if (member == null) return;
 
-        boolean hasRole = member.getRoles().stream()
-                .anyMatch(role -> role.getIdLong() == GIVEAWAY_ROLE_ID);
+            boolean hasRole = member.getRoles().stream()
+                    .anyMatch(role -> role.getIdLong() == GIVEAWAY_ROLE_ID);
 
-        if (!hasRole) {
-            event.getHook().sendMessage("❌ No tienes permiso para gestionar sorteos.")
-                    .setEphemeral(true)
-                    .queue();
-            return;
-        }
+            if (!hasRole) {
+                event.getHook().sendMessage("❌ No tienes permiso para gestionar sorteos.")
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
 
-        String premio = event.getOption("premio").getAsString();
-        int ganadores = event.getOption("ganadores").getAsInt();
-        int horas = event.getOption("horas").getAsInt();
+            String premio = event.getOption("premio").getAsString();
+            int ganadores = event.getOption("ganadores").getAsInt();
+            int horas = event.getOption("horas").getAsInt();
 
-        OptionMapping messageIdOption = event.getOption("messageid");
+            OptionMapping messageIdOption = event.getOption("messageid");
 
-        if (messageIdOption != null) {
-            long messageId;
-            try {
-                messageId = messageIdOption.getAsLong();
-            } catch (NumberFormatException e) {
-                event.getHook().sendMessage("❌ No se encontró ningún mensaje con ese ID en este canal, este parámetro es opcional y solo se debe usar cuando se requiere terminar un sorteo de manera manual usando el ID del mensaje").queue();
+            if (messageIdOption != null) {
+                long messageId;
+                try {
+                    messageId = messageIdOption.getAsLong();
+                } catch (NumberFormatException e) {
+                    event.getHook().sendMessage("❌ No se encontró ningún mensaje con ese ID en este canal, este parámetro es opcional y solo se debe usar cuando se requiere terminar un sorteo de manera manual usando el ID del mensaje").queue();
+                    return;
+                }
+
+                TextChannel channel = event.getChannel().asTextChannel();
+
+                channel.retrieveMessageById(messageId).queue(
+                        message -> {
+                            if (message.getEmbeds().isEmpty()) {
+                                event.getHook().sendMessage("❌ Este mensaje no contiene un sorteo válido.").setEphemeral(true).queue();
+                                return;
+                            }
+
+                            var embed = message.getEmbeds().get(0);
+
+                            String description = embed.getDescription();
+                            String premioExistente = "";
+                            int ganadoresExistentes = 1;
+
+                            if (description != null) {
+                                var premioMatcher = java.util.regex.Pattern.compile("🍫 \\*\\*(.+?)\\*\\*").matcher(description);
+                                if (premioMatcher.find()) {
+                                    premioExistente = premioMatcher.group(1);
+                                }
+
+                                var ganadoresMatcher = java.util.regex.Pattern.compile("👥 \\*\\*Ganadores:\\*\\* `([0-9]+)`").matcher(description);
+                                if (ganadoresMatcher.find()) {
+                                    ganadoresExistentes = Integer.parseInt(ganadoresMatcher.group(1));
+                                }
+                            }
+
+                            if (premioExistente.isBlank()) {
+                                event.getHook().sendMessage("❌ No se pudo extraer el premio del sorteo existente.").setEphemeral(true).queue();
+                                return;
+                            }
+                            finishGiveaway(
+                                    channel.getIdLong(),
+                                    messageId,
+                                    ganadoresExistentes,
+                                    jda,
+                                    premioExistente
+                            );
+
+                            event.getHook().sendMessage("✅ Sorteo finalizado usando el mensaje proporcionado.").queue();
+                        },
+                        error -> {
+                            event.getHook().sendMessage("❌ No se encontró ningún mensaje con ese ID en este canal, este parámetro es opcional y solo se debe usar cuando se requiere terminar un sorteo de manera manual usando el ID del mensaje").queue();
+                        }
+                );
+
+                return;
+            }
+
+            if (ganadores <= 0 || horas <= 0) {
+                event.reply("❌ Valores inválidos.")
+                        .setEphemeral(true)
+                        .queue();
                 return;
             }
 
             TextChannel channel = event.getChannel().asTextChannel();
 
-            channel.retrieveMessageById(messageId).queue(
-                    message -> {
-                        if (message.getEmbeds().isEmpty()) {
-                            event.getHook().sendMessage("❌ Este mensaje no contiene un sorteo válido.").setEphemeral(true).queue();
-                            return;
+            IMAGE_EXECUTOR.submit(() -> {
+                try {
+                    String imageHost = "https://i.imgur.com/";
+                    OptionMapping imageOption = event.getOption("imagenid");
+
+                    String overlayImageId = "mq2NOLF.png";
+
+                    if (imageOption != null) {
+                        String imagenPremio = imageOption.getAsString();
+                        if (!imagenPremio.isBlank()) {
+                            overlayImageId = imagenPremio;
                         }
-
-                        var embed = message.getEmbeds().get(0);
-
-                        String description = embed.getDescription();
-                        String premioExistente = "";
-                        int ganadoresExistentes = 1;
-
-                        if (description != null) {
-                            var premioMatcher = java.util.regex.Pattern.compile("🍫 \\*\\*(.+?)\\*\\*").matcher(description);
-                            if (premioMatcher.find()) {
-                                premioExistente = premioMatcher.group(1);
-                            }
-
-                            var ganadoresMatcher = java.util.regex.Pattern.compile("👥 \\*\\*Ganadores:\\*\\* `([0-9]+)`").matcher(description);
-                            if (ganadoresMatcher.find()) {
-                                ganadoresExistentes = Integer.parseInt(ganadoresMatcher.group(1));
-                            }
-                        }
-
-                        if (premioExistente.isBlank()) {
-                            event.getHook().sendMessage("❌ No se pudo extraer el premio del sorteo existente.").setEphemeral(true).queue();
-                            return;
-                        }
-                        finishGiveaway(
-                                channel.getIdLong(),
-                                messageId,
-                                ganadoresExistentes,
-                                jda,
-                                premioExistente
-                        );
-
-                        event.getHook().sendMessage("✅ Sorteo finalizado usando el mensaje proporcionado.").queue();
-                    },
-                    error -> {
-                        event.getHook().sendMessage("❌ No se encontró ningún mensaje con ese ID en este canal, este parámetro es opcional y solo se debe usar cuando se requiere terminar un sorteo de manera manual usando el ID del mensaje").queue();
                     }
-            );
+                    BufferedImage base = loadImageFromUrl(BASE_IMAGE_URLS.get(RANDOM.nextInt(BASE_IMAGE_URLS.size())));
+                    BufferedImage overlay = loadImageFromUrl(imageHost + overlayImageId);
 
-            return;
-        }
+                    Graphics2D g = base.createGraphics();
+                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        if (ganadores <= 0 || horas <= 0) {
-            event.reply("❌ Valores inválidos.")
-                    .setEphemeral(true)
-                    .queue();
-            return;
-        }
+                    int centerX = base.getWidth() / 2;
+                    int centerY = base.getHeight() / 2;
 
-        TextChannel channel = event.getChannel().asTextChannel();
+                    int drawX = centerX - overlay.getWidth() / 2;
+                    int drawY = centerY - overlay.getHeight() / 2;
 
-        IMAGE_EXECUTOR.submit(() -> {
-            try {
-                String imageHost = "https://i.imgur.com/";
-                OptionMapping imageOption = event.getOption("imagenid");
+                    g.drawImage(overlay, drawX, drawY, null);
+                    g.dispose();
 
-                String overlayImageId = "mq2NOLF.png";
+                    ByteArrayOutputStream os = new ByteArrayOutputStream();
+                    ImageIO.write(base, "png", os);
+                    byte[] imageBytes = os.toByteArray();
 
-                if (imageOption != null) {
-                    String imagenPremio = imageOption.getAsString();
-                    if (!imagenPremio.isBlank()) {
-                        overlayImageId = imagenPremio;
-                    }
+                    EmbedBuilder embed = new EmbedBuilder()
+                            .setTitle("🎁 ¡SORTEO ACTIVO! 🎁")
+                            .setDescription(
+                                    "✨ **¿Qué estamos regalando?**\n" +
+                                            "🍫 **" + premio + "**\n\n" +
+                                            "👥 **Ganadores:** `" + ganadores + "`\n" +
+                                            "⏳ **Duración:** `" + horas + " " + (horas == 1 ? "hora" : "horas") + "`\n\n" +
+                                            "👉 **¿Cómo participar?**\n" +
+                                            "Reacciona con ✨ a este mensaje y ¡listo!\n\n" +
+                                            "🍀 **¡Mucha suerte a todos!**"
+                            )
+                            .setImage("attachment://sorteo.png")
+                            .setFooter("hobba.tv", FOOTER_ICON)
+                            .setColor(Color.GREEN);
+
+                    channel.sendFiles(FileUpload.fromData(imageBytes, "sorteo.png"))
+                            .setEmbeds(embed.build())
+                            .queue(sentMessage -> {
+                                sentMessage.addReaction(Emoji.fromUnicode("✨")).queue();
+
+                                scheduleFinish(
+                                        sentMessage.getChannel().getIdLong(),
+                                        sentMessage.getIdLong(),
+                                        ganadores,
+                                        horas,
+                                        jda,
+                                        premio
+                                );
+                            });
+
+                    event.getHook().sendMessage("✅ Sorteo creado correctamente.").queue();
+
+                } catch (Exception e) {
+                    sendTrace(event.getJDA(), e);
                 }
-                BufferedImage base = loadImageFromUrl(BASE_IMAGE_URLS.get(RANDOM.nextInt(BASE_IMAGE_URLS.size())));
-                BufferedImage overlay = loadImageFromUrl(imageHost + overlayImageId);
+            });
+        } catch (Exception e) {
+            sendTrace(event.getJDA(), e);
+        }
 
-                Graphics2D g = base.createGraphics();
-                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                int centerX = base.getWidth() / 2;
-                int centerY = base.getHeight() / 2;
-
-                int drawX = centerX - overlay.getWidth() / 2;
-                int drawY = centerY - overlay.getHeight() / 2;
-
-                g.drawImage(overlay, drawX, drawY, null);
-                g.dispose();
-
-                ByteArrayOutputStream os = new ByteArrayOutputStream();
-                ImageIO.write(base, "png", os);
-                byte[] imageBytes = os.toByteArray();
-
-                EmbedBuilder embed = new EmbedBuilder()
-                        .setTitle("🎁 ¡SORTEO ACTIVO! 🎁")
-                        .setDescription(
-                                "✨ **¿Qué estamos regalando?**\n" +
-                                        "🍫 **" + premio + "**\n\n" +
-                                        "👥 **Ganadores:** `" + ganadores + "`\n" +
-                                        "⏳ **Duración:** `" + horas + " " + (horas == 1 ? "hora" : "horas") + "`\n\n" +
-                                        "👉 **¿Cómo participar?**\n" +
-                                        "Reacciona con ✨ a este mensaje y ¡listo!\n\n" +
-                                        "🍀 **¡Mucha suerte a todos!**"
-                        )
-                        .setImage("attachment://sorteo.png")
-                        .setFooter("hobba.tv", FOOTER_ICON)
-                        .setColor(Color.GREEN);
-
-                channel.sendFiles(FileUpload.fromData(imageBytes, "sorteo.png"))
-                        .setEmbeds(embed.build())
-                        .queue(sentMessage -> {
-                            sentMessage.addReaction(Emoji.fromUnicode("✨")).queue();
-
-                            scheduleFinish(
-                                    sentMessage.getChannel().getIdLong(),
-                                    sentMessage.getIdLong(),
-                                    ganadores,
-                                    horas,
-                                    jda,
-                                    premio
-                            );
-                        });
-
-                event.getHook().sendMessage("✅ Sorteo creado correctamente.").queue();
-
-            } catch (Exception e) {
-                log.error("Error creando sorteo", e);
-                event.getHook().sendMessage("❌ Error al crear el sorteo.").queue();
-            }
-        });
     }
 
     private void scheduleFinish(long channelId, long messageId, int ganadores, int horas, JDA jda, String premio) {
@@ -311,14 +318,14 @@ public class Giveaway extends ListenerAdapter implements ICommand {
                         displayNames.add(displayName);
 
                         if (pending.decrementAndGet() == 0) {
-                            renderImageAndSend(channel, displayNames, menciones, premio);
+                            renderImageAndSend(channel, displayNames, menciones, premio, jda);
                         }
 
                     }, error -> {
                         displayNames.add("drow");
 
                         if (pending.decrementAndGet() == 0) {
-                            renderImageAndSend(channel, displayNames, menciones, premio);
+                            renderImageAndSend(channel, displayNames, menciones, premio, jda);
                         }
                     });
                 }
@@ -344,7 +351,8 @@ public class Giveaway extends ListenerAdapter implements ICommand {
             TextChannel channel,
             List<String> displayNames,
             String menciones,
-            String premio
+            String premio,
+            JDA jda
     ) {
         try {
             BufferedImage base = loadImageFromUrl(BASE_WINNER_IMAGE_URL);
@@ -406,7 +414,22 @@ public class Giveaway extends ListenerAdapter implements ICommand {
                     .queue();
 
         } catch (Exception e) {
-            e.printStackTrace();
+            sendTrace(jda, e);
         }
+    }
+
+    private void sendTrace(JDA jda, Throwable e) {
+        TextChannel channel = jda.getTextChannelById(GIVEAWAY_ERROR_CHANNEL_ID);
+        if (channel == null) return;
+
+        StringWriter sw = new StringWriter();
+        e.printStackTrace(new PrintWriter(sw));
+
+        String trace = sw.toString();
+        if (trace.length() > 1900) {
+            trace = trace.substring(0, 1900);
+        }
+
+        channel.sendMessage(trace).queue();
     }
 }
