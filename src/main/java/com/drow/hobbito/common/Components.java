@@ -3,6 +3,8 @@ package com.drow.hobbito.common;
 import net.dv8tion.jda.api.EmbedBuilder;
 
 import java.awt.*;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class Components {
@@ -16,6 +18,12 @@ public class Components {
             Color.GREEN,
             Color.PINK
     );
+
+    public static String buildAvatarUrl(String username) {
+        return "https://www.hobba.tv/habblet/avatarimageByUsername/"
+                + username
+                + "?size=undefined&direction=2&head_direction=3&headonly=0&action=wav&gesture=sml";
+    }
 
     private Components() {
     }
