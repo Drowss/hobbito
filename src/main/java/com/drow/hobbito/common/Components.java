@@ -22,7 +22,7 @@ public class Components {
     public static String buildAvatarUrl(String username) {
         return "https://www.hobba.tv/habblet/avatarimageByUsername/"
                 + username
-                + "?size=undefined&direction=2&head_direction=3&headonly=0&action=wav&gesture=sml";
+                + "?size=undefined&direction=2&head_direction=2&headonly=0&action=wav&gesture=sml";
     }
 
     private Components() {
