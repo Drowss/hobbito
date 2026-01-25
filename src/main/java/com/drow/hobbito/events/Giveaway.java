@@ -7,8 +7,8 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.entities.channel.Channel;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -30,11 +30,15 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -53,12 +57,14 @@ public class Giveaway extends ListenerAdapter implements ICommand {
     private static final ExecutorService IMAGE_EXECUTOR =
             Executors.newFixedThreadPool(2);
     private static final List<String> BASE_IMAGE_URLS = List.of(
-            "https://i.imgur.com/YQEEylM.png",
-            "https://i.imgur.com/daBL3Xu.png",
-            "https://i.imgur.com/9GVahGr.png",
-            "https://i.imgur.com/j2iYcAT.png"
+            "https://raw.githubusercontent.com/Drowss/hobba-assets/main/images/base/issfondo2.png",
+            "https://raw.githubusercontent.com/Drowss/hobba-assets/main/images/base/issfondo3.png",
+            "https://raw.githubusercontent.com/Drowss/hobba-assets/main/images/base/issfondo4.png",
+            "https://raw.githubusercontent.com/Drowss/hobba-assets/main/images/base/issfondo5.png"
     );
-    private static final String BASE_WINNER_IMAGE_URL = "https://i.imgur.com/RiRJAGn.png";
+    private static final String BASE_WINNER_IMAGE_URL = "https://raw.githubusercontent.com/Drowss/hobba-assets/main/images/winners/isswinners2.png";
+    private static final Map<Long, ScheduledFuture<?>> ACTIVE_GIVEAWAYS =
+            new ConcurrentHashMap<>();
 
     @Override
     public String getName() {
@@ -172,6 +178,13 @@ public class Giveaway extends ListenerAdapter implements ICommand {
                                     premioExistente
                             );
 
+                            ScheduledFuture<?> future = ACTIVE_GIVEAWAYS.get(messageId);
+
+                            if (future != null) {
+                                future.cancel(false);
+                                ACTIVE_GIVEAWAYS.remove(messageId);
+                            }
+
                             event.getHook().sendMessage("✅ Sorteo finalizado usando el mensaje proporcionado.").queue();
                         },
                         error -> {
@@ -193,10 +206,10 @@ public class Giveaway extends ListenerAdapter implements ICommand {
 
             IMAGE_EXECUTOR.submit(() -> {
                 try {
-                    String imageHost = "https://i.imgur.com/";
+                    String imageHost = "https://raw.githubusercontent.com/Drowss/hobba-assets/main/images/prizes/";
                     OptionMapping imageOption = event.getOption("imagenid");
 
-                    String overlayImageId = "mq2NOLF.png";
+                    String overlayImageId = "default.png";
 
                     if (imageOption != null) {
                         String imagenPremio = imageOption.getAsString();
@@ -238,7 +251,9 @@ public class Giveaway extends ListenerAdapter implements ICommand {
                             .setFooter("hobba.tv", FOOTER_ICON)
                             .setColor(Color.GREEN);
 
-                    channel.sendFiles(FileUpload.fromData(imageBytes, "sorteo.png"))
+                    channel.sendMessage("@everyone")
+                            .setAllowedMentions(EnumSet.of(Message.MentionType.EVERYONE))
+                            .addFiles(FileUpload.fromData(imageBytes, "sorteo.png"))
                             .setEmbeds(embed.build())
                             .queue(sentMessage -> {
                                 sentMessage.addReaction(Emoji.fromUnicode("✨")).queue();
@@ -266,11 +281,16 @@ public class Giveaway extends ListenerAdapter implements ICommand {
     }
 
     private void scheduleFinish(long channelId, long messageId, int ganadores, int horas, JDA jda, String premio) {
-        SCHEDULER.schedule(
-                () -> finishGiveaway(channelId, messageId, ganadores, jda, premio),
+        ScheduledFuture<?> future = SCHEDULER.schedule(
+                () -> {
+                    finishGiveaway(channelId, messageId, ganadores, jda, premio);
+                    ACTIVE_GIVEAWAYS.remove(messageId);
+                },
                 horas,
                 TimeUnit.HOURS
         );
+
+        ACTIVE_GIVEAWAYS.put(messageId, future);
     }
 
     private void finishGiveaway(long channelId, long messageId, int ganadores, JDA jda, String premio) {
