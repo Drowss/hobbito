@@ -6,6 +6,7 @@ import com.drow.hobbito.common.HobbaUserCode;
 import com.drow.hobbito.events.AccountVerification;
 import com.drow.hobbito.events.Giveaway;
 import com.drow.hobbito.events.Tickets;
+import com.drow.hobbito.events.VouchersByPeriod;
 import com.drow.hobbito.interfaces.ICommand;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -47,7 +48,8 @@ public class BotConfig {
     public List<ICommand> allDiscordCommands(Cache<String, HobbaUserCode> cache, GetUserAdapter getUserAdapter) {
         return List.of(
                 new AccountVerification(cache, getUserAdapter),
-                new Giveaway()
+                new Giveaway(),
+                new VouchersByPeriod()
         );
     }
 

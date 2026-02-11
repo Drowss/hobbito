@@ -36,7 +36,6 @@ public class Main implements CommandLineRunner {
     }
 
     public static void main(String[] args) {
-        System.out.println("1");
         SpringApplication.run(Main.class, args);
     }
 
