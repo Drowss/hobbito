@@ -206,7 +206,7 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
         }
 
         Font font = Font.createFont(Font.TRUETYPE_FONT, fontStream)
-                .deriveFont(Font.BOLD, 24f);
+                .deriveFont(Font.BOLD, 36f);
 
         g.setFont(font);
         g.setColor(Color.decode("#2e2eff"));
