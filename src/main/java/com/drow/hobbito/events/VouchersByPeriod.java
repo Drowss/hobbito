@@ -45,7 +45,7 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
     private static final int START_HOUR = 10;
     private static final int END_HOUR = 20;
     private static final long VOUCHERS_CODE_CHANNEL_ID = 1470993021167341720L;
-    private static final long VOUCHERS_LOGS_CHANNEL_ID = 1458261437561704604L;
+    private static final long VOUCHERS_LOGS_CHANNEL_ID = 1470986922280353958L;
     private static final Set<Long> USERS_ABLE_TO_POST_VOUCHERS = new HashSet<>(Arrays.asList(
             408250800385818635L,
             339140796311797774L,
