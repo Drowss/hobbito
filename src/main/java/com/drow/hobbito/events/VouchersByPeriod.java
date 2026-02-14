@@ -15,6 +15,7 @@ import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.utils.FileUpload;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -27,7 +28,11 @@ import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static com.drow.hobbito.common.Components.FOOTER_ICON;
@@ -39,11 +44,15 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
     private static final ZoneId COLOMBIA = ZoneId.of("America/Bogota");
     private static final int START_HOUR = 10;
     private static final int END_HOUR = 20;
-    private static final long VOUCHERS_CODE_CHANNEL_ID = 1461597989113036841L;
+    private static final long VOUCHERS_CODE_CHANNEL_ID = 1470993021167341720L;
     private static final long VOUCHERS_LOGS_CHANNEL_ID = 1458261437561704604L;
-    private static final long USER_ABLE_TO_POST_VOUCHERS_ID = 339140796311797774L;
-    private static final long CHANNEL_TO_SEND_VOUCHER_ID = 1415543423334744180L;
-    private static final long VOUCHERS_ROLE_ID = 1458251135692574827L;
+    private static final Set<Long> USERS_ABLE_TO_POST_VOUCHERS = new HashSet<>(Arrays.asList(
+            408250800385818635L,
+            339140796311797774L,
+            658161685361590274L
+    ));
+    private static final long CHANNEL_TO_SEND_VOUCHER_ID = 640608787815727117L;
+    private static final long VOUCHERS_ROLE_ID = 1470987122176430112L;
     private static final String IMAGES_HOST = "https://raw.githubusercontent.com/Drowss/hobba-assets/main";
     private LocalDate lastSentDate = null;
     private Boolean vouchersState = false;
@@ -64,7 +73,7 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
             return;
         }
 
-        Boolean activar = event.getOption("activar").getAsBoolean();
+        Boolean activar = event.getOption("mode").getAsBoolean();
         String plantilla = event.getOption("plantilla", "voucherBackgroundDefault.png", OptionMapping::getAsString);
 
 
@@ -72,31 +81,31 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
                 .setEphemeral(true)
                 .queue();
 
-        sendVoucher(event.getJDA(), plantilla);
+        if (activar && !vouchersState) {
+            vouchersState = true;
+            JDA jda = event.getJDA();
+            sendLog(jda, "Programando vouchers diarios...");
+            voucherScheduler = scheduleNext(jda, plantilla)
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .subscribe();
+            return;
+        }
 
-//        if (activar && !vouchersState) {
-//            vouchersState = true;
-//            JDA jda = event.getJDA();
-//            sendLog(jda, "Programando vouchers diarios...");
-//            voucherScheduler = scheduleNext(jda, plantilla)
-//                    .subscribe();
-//            return;
-//        }
-//
-//        if (!activar && vouchersState) {
-//            vouchersState = false;
-//
-//            if (voucherScheduler != null && !voucherScheduler.isDisposed()) {
-//                voucherScheduler.dispose();
-//                voucherScheduler = null;
-//            }
-//
-//            sendLog(event.getJDA(), "Apagando vouchers... ⛔");
-//        }
+        if (!activar && vouchersState) {
+            vouchersState = false;
+
+            if (voucherScheduler != null && !voucherScheduler.isDisposed()) {
+                voucherScheduler.dispose();
+                voucherScheduler = null;
+            }
+
+            sendLog(event.getJDA(), "Apagando vouchers... ⛔");
+        }
     }
 
     private Mono<Void> scheduleNext(JDA jda, String voucherBackground) {
         ZonedDateTime now = ZonedDateTime.now(COLOMBIA);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
         if (lastSentDate != null && lastSentDate.isEqual(now.toLocalDate())) {
             ZonedDateTime tomorrow = now
@@ -105,6 +114,8 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
                     .withMinute(0)
                     .withSecond(0)
                     .withNano(0);
+
+            sendLog(jda, "Reprogramando voucher para mañana");
 
             long delayMillis = java.time.Duration.between(now, tomorrow).toMillis();
             return Mono.delay(java.time.Duration.ofMillis(delayMillis))
@@ -123,68 +134,95 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
             nextRun = nextRun.plusDays(1);
         }
 
-        long delayMillis = java.time.Duration.between(now, nextRun).toMillis();
+        ZonedDateTime finalNextRun = nextRun;
+        return getVoucherToSend(jda)
+                .flatMap(message -> {
+                    long delayMillis = java.time.Duration.between(now, finalNextRun).toMillis();
+                    if (message == null) {
+                        sendLog(jda, "No se encontró voucher para enviar.");
+                        return Mono.delay(java.time.Duration.ofMillis(delayMillis))
+                                .flatMap(t -> scheduleNext(jda, voucherBackground));
+                    }
 
-        return Mono.delay(java.time.Duration.ofMillis(delayMillis))
-                .flatMap(t -> {
-                    sendVoucher(jda, voucherBackground);
-                    lastSentDate = ZonedDateTime.now(COLOMBIA).toLocalDate();
-                    return scheduleNext(jda, voucherBackground);
+                    String formattedDate = finalNextRun.format(formatter);
+
+                    sendLog(jda, "El próximo envío será el: " + formattedDate + " | Código: " + message.getContentRaw());
+
+                    return Mono.delay(java.time.Duration.ofMillis(delayMillis))
+                            .flatMap(t -> {
+                                sendVoucher(jda, voucherBackground, message);
+                                lastSentDate = ZonedDateTime.now(COLOMBIA).toLocalDate();
+                                return scheduleNext(jda, voucherBackground);
+                            });
                 });
     }
 
-    private void sendVoucher(JDA jda, String voucherBackground) {
-        TextChannel channel = jda.getTextChannelById(VOUCHERS_CODE_CHANNEL_ID);
-        if (channel == null) return;
+    private Mono<Message> getVoucherToSend(JDA jda) {
+        return Mono.create(sink -> {
 
-        channel.getHistory().retrievePast(100).queue(messages -> {
-            List<Message> userMessages = messages.stream()
-                    .filter(m -> m.getAuthor().getIdLong() == USER_ABLE_TO_POST_VOUCHERS_ID)
-                    .toList();
-
-            if (userMessages.isEmpty()) {
-                sendLog(jda, "No hay mensajes de este usuario " + userMessages);
+            TextChannel channel = jda.getTextChannelById(VOUCHERS_CODE_CHANNEL_ID);
+            if (channel == null) {
+                sink.success();
                 return;
             }
 
-            Message randomMessage = userMessages.get(ThreadLocalRandom.current().nextInt(userMessages.size()));
+            channel.getHistory().retrievePast(100).queue(messages -> {
 
-            try {
-                byte[] imageBytes = buildVoucherImage(
-                        jda,
-                        voucherBackground,
-                        randomMessage.getContentRaw()
+                List<Message> userMessages = messages.stream()
+                        .filter(m -> USERS_ABLE_TO_POST_VOUCHERS.contains(m.getAuthor().getIdLong()))
+                        .toList();
+
+                if (userMessages.isEmpty()) {
+                    sink.success();
+                    return;
+                }
+
+                Message randomMessage = userMessages.get(
+                        ThreadLocalRandom.current().nextInt(userMessages.size())
                 );
 
-                EmbedBuilder embed = new EmbedBuilder()
-                        .setTitle("🎟️ ¡VOUCHER DISPONIBLE! 🎟️")
-                        .setDescription(
-                                "¡Sé el primero en canjearlo!🎉\n\n" +
-                                        "💳 **Código:** `" + randomMessage.getContentRaw() + "`"
-                        )
-                        .setImage("attachment://voucher.png")
-                        .setFooter("hobba.tv", FOOTER_ICON)
-                        .setColor(Color.ORANGE);
+                sink.success(randomMessage);
 
-                TextChannel channelToSendEmbed = jda.getTextChannelById(CHANNEL_TO_SEND_VOUCHER_ID);
-
-                channelToSendEmbed.sendMessageEmbeds(embed.build())
-                        .addFiles(
-                                FileUpload.fromData(imageBytes, "voucher.png")
-                        )
-                        .queue(
-                                success -> sendLog(jda, "Voucher enviado correctamente 🎉 " + randomMessage.getContentRaw()),
-                                error -> sendLog(jda, "Error enviando voucher: " + error.getMessage())
-                        );
-            } catch (Exception e) {
-                sendLog(jda, e.getMessage());
-            }
-
-            randomMessage.delete().queue(
-                    success -> sendLog(jda, "Voucher usado: " + randomMessage.getContentDisplay()),
-                    error -> sendLog(jda, "No se pudo eliminar voucher: " + error.getMessage() + " " + error.getClass().getSimpleName())
-            );
+            }, sink::error);
         });
+    }
+
+    private void sendVoucher(JDA jda, String voucherBackground, Message message) {
+        try {
+            byte[] imageBytes = buildVoucherImage(
+                    jda,
+                    voucherBackground,
+                    message.getContentRaw()
+            );
+
+            EmbedBuilder embed = new EmbedBuilder()
+                    .setTitle("🎟️ ¡VOUCHER DISPONIBLE! 🎟️")
+                    .setDescription(
+                            "¡Sé el primero en cajearlo antes de que se agote!🎉\n\n" +
+                                    "💳 **Código:** `" + message.getContentRaw() + "`"
+                    )
+                    .setImage("attachment://voucher.png")
+                    .setFooter("hobba.tv", FOOTER_ICON)
+                    .setColor(Color.ORANGE);
+
+            TextChannel channelToSendEmbed = jda.getTextChannelById(CHANNEL_TO_SEND_VOUCHER_ID);
+
+            channelToSendEmbed.sendMessageEmbeds(embed.build())
+                    .addFiles(
+                            FileUpload.fromData(imageBytes, "voucher.png")
+                    )
+                    .queue(
+                            success -> sendLog(jda, "Voucher enviado correctamente 🎉 " + message.getContentRaw()),
+                            error -> sendLog(jda, "Error enviando voucher: " + error.getMessage())
+                    );
+        } catch (Exception e) {
+            sendLog(jda, e.getMessage());
+        }
+
+        message.delete().queue(
+                success -> sendLog(jda, "Voucher usado: " + message.getContentDisplay()),
+                error -> sendLog(jda, "No se pudo eliminar voucher: " + error.getMessage() + " " + error.getClass().getSimpleName())
+        );
     }
 
     private void sendLog(JDA jda, String log) {
@@ -232,7 +270,7 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
 
     @Override
     public String getName() {
-        return "voucher";
+        return "dailyvoucher";
     }
 
     @Override
@@ -245,7 +283,7 @@ public class VouchersByPeriod extends ListenerAdapter implements ICommand {
         return List.of(
                 new OptionData(
                         OptionType.BOOLEAN,
-                        "activar",
+                        "mode",
                         "activar/desactivar vouchers",
                         true),
                 new OptionData(
